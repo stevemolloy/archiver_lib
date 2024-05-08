@@ -1,5 +1,6 @@
+use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::types::chrono::{DateTime, Local, Utc};
+use sqlx::types::chrono::{DateTime, Local, NaiveDateTime, Utc};
 use sqlx::{Pool, Postgres, Row};
 use std::collections::HashMap;
 use std::fs::File;
@@ -10,6 +11,18 @@ const DB_TYPE: &str = "postgresql://hdb_viewer";
 const DB_USER: &str = "2tQXXVJtax+QLj61tg1Zxg+AByTLTt526AHcM+XmVCVW";
 const DB_URL: &str = "timescaledb.maxiv.lu.se";
 const DB_PORT: &str = "15432";
+
+#[derive(Parser)]
+#[command(about, long_about=None)]
+struct Cli {
+    searchstr: String,
+
+    #[arg(short, long)]
+    start: NaiveDateTime,
+
+    #[arg(short, long)]
+    end: NaiveDateTime,
+}
 
 #[derive(Debug)]
 struct ArchiverAttr {
@@ -111,6 +124,8 @@ async fn get_single_attr_data(
 
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
+    let cli = Cli::parse();
+
     let database = "accelerator";
     let db_names = HashMap::from([("accelerator", "hdb_machine")]);
 
@@ -124,18 +139,14 @@ async fn main() -> Result<(), sqlx::Error> {
         .connect(&db_conn_str)
         .await?;
 
-    let attrs = get_ids_and_tables("r3.*dia.*dcct.*inst.*".to_string(), &pool).await?;
+    let attrs = get_ids_and_tables(cli.searchstr.to_string(), &pool).await?;
 
-    let start = "2024-05-06T01:00:00+02:00"
-        .parse()
-        .expect("String not convertable to DateTime");
-    let stop = "2024-05-06T01:01:00+02:00"
-        .parse()
-        .expect("String not convertable to DateTime");
+    let start = cli.start.and_local_timezone(Local).unwrap();
+    let end = cli.end.and_local_timezone(Local).unwrap();
 
     for (i, attr) in attrs.iter().enumerate() {
-        let res = get_single_attr_data(attr, &start, &stop, &pool).await?;
-        res.write_taurus_file(format!("archive_data_{}.dat", i).as_str());
+        let res = get_single_attr_data(attr, &start, &end, &pool).await?;
+        res.write_taurus_file(format!("archive_data_{:04}.dat", i).as_str());
     }
 
     Ok(())
