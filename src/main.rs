@@ -1,7 +1,9 @@
 use sqlx::postgres::PgPoolOptions;
-use sqlx::types::chrono::{DateTime, Utc};
+use sqlx::types::chrono::{DateTime, Local, Utc};
 use sqlx::{Pool, Postgres, Row};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::prelude::*;
 use tokio;
 
 const DB_TYPE: &str = "postgresql://hdb_viewer";
@@ -23,14 +25,29 @@ struct ArchiverData {
 }
 
 impl ArchiverData {
-    fn get_taurus_format(self) -> String {
+    fn get_taurus_format(&self) -> String {
         let mut result: String = Default::default();
-        result += format!("\"# DATASET= {}\"", self.name).as_str();
-        todo!()
+        result += format!("\"# DATASET= {}\"\n", self.name).as_str();
+        result += format!("\"# SNAPSHOT_TIME=\"\n").as_str();
+
+        for (date, val) in self.time.iter().zip(self.data.iter()) {
+            result += format!(
+                "{}, {}\n",
+                date.with_timezone(&Local).format("%Y-%m-%d_%H:%M:%S.%f"),
+                val
+            )
+            .as_str();
+        }
+
+        return result;
     }
 
     fn write_taurus_file(self, fname: &str) {
-        todo!()
+        let string_to_write = self.get_taurus_format();
+        let mut file = File::create(fname).expect("Could not open file");
+
+        file.write_all(string_to_write.as_bytes())
+            .expect("Could not write to file");
     }
 }
 
@@ -62,8 +79,8 @@ async fn get_ids_and_tables(
 
 async fn get_single_attr_data(
     attr: &ArchiverAttr,
-    start: &str,
-    end: &str,
+    start: &DateTime<Local>,
+    end: &DateTime<Local>,
     pool: &Pool<Postgres>,
 ) -> Result<ArchiverData, sqlx::Error> {
     let rows = sqlx::query(
@@ -111,15 +128,16 @@ async fn main() -> Result<(), sqlx::Error> {
 
     let attrs = get_ids_and_tables("r3.*dia.*dcct.*inst.*".to_string(), &pool).await?;
 
-    let start = "2024-05-06T00:00:00".to_string();
-    let stop = "2024-05-06T00:01:00".to_string();
+    let start = "2024-05-06T01:00:00+02:00"
+        .parse()
+        .expect("String not convertable to DateTime");
+    let stop = "2024-05-06T01:01:00+02:00"
+        .parse()
+        .expect("String not convertable to DateTime");
 
     for (i, attr) in attrs.iter().enumerate() {
         let res = get_single_attr_data(attr, &start, &stop, &pool).await?;
-        println!("{}", res.name);
-        for (t, v) in res.time.iter().zip(res.data) {
-            println!("{}: {}", t, v);
-        }
+        res.write_taurus_file(format!("archive_data_{}.dat", i).as_str());
     }
 
     Ok(())
