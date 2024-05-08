@@ -102,10 +102,8 @@ async fn get_single_attr_data(
     };
 
     for row in rows {
-        let a = row.get::<DateTime<Utc>, _>(1);
-        let b = row.get::<f64, _>(2);
-        result.time.push(a);
-        result.data.push(b);
+        result.time.push(row.get(1));
+        result.data.push(row.get(2));
     }
 
     Ok(result)
