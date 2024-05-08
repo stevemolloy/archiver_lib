@@ -71,7 +71,7 @@ async fn get_ids_and_tables(
     let rows = sqlx::query(
         format!(
             "SELECT att_conf_id, att_name, table_name FROM att_conf
-    WHERE att_name ~ '{searchstr}' ORDER BY att_conf_id"
+            WHERE att_name ~ '{searchstr}' ORDER BY att_conf_id"
         )
         .as_str(),
     )
@@ -99,8 +99,7 @@ async fn get_single_attr_data(
     let rows = sqlx::query(
         format!(
             "SELECT * FROM {} WHERE att_conf_id = {} AND data_time
-            BETWEEN '{}' AND '{}'
-            ORDER BY data_time",
+            BETWEEN '{}' AND '{}' ORDER BY data_time",
             attr.table, attr.id, start, end
         )
         .as_str(),
