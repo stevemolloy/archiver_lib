@@ -11,21 +11,6 @@ const DB_USER: &str = "2tQXXVJtax+QLj61tg1Zxg+AByTLTt526AHcM+XmVCVW";
 const DB_URL: &str = "timescaledb.maxiv.lu.se";
 const DB_PORT: &str = "15432";
 
-#[derive(Parser)]
-#[command(about, long_about=None)]
-struct Cli {
-    searchstr: String,
-
-    #[arg(short, long)]
-    start: NaiveDateTime,
-
-    #[arg(short, long)]
-    end: NaiveDateTime,
-
-    #[arg(short, long, default_value = "accelerator")]
-    database: String,
-}
-
 #[derive(Debug)]
 struct ArchiverAttr {
     id: i32,
@@ -43,7 +28,7 @@ impl ArchiverData {
     fn get_taurus_format(&self) -> String {
         let mut result: String = Default::default();
         result += format!("\"# DATASET= {}\"\n", self.name).as_str();
-        result += "\"# SNAPSHOT_TIME=\"\n";
+        result += "\"# SNAPSHOT_TIME= \"\n";
 
         for (date, val) in self.time.iter().zip(self.data.iter()) {
             result += format!(
@@ -123,6 +108,24 @@ async fn get_single_attr_data(
     Ok(result)
 }
 
+#[derive(Parser)]
+#[command(about, long_about=None)]
+struct Cli {
+    searchstr: String,
+
+    #[arg(short, long)]
+    start: NaiveDateTime,
+
+    #[arg(short, long)]
+    end: NaiveDateTime,
+
+    #[arg(short, long, default_value = "accelerator")]
+    database: String,
+
+    #[arg(short, long)]
+    file: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let cli = Cli::parse();
@@ -152,7 +155,12 @@ async fn main() -> Result<(), sqlx::Error> {
 
     for (i, attr) in attrs.iter().enumerate() {
         let res = get_single_attr_data(attr, &start, &end, &pool).await?;
-        res.write_taurus_file(format!("archive_data_{:04}.dat", i).as_str());
+        match cli.file {
+            None => println!("{}", res.get_taurus_format()),
+            Some(ref filename) => {
+                res.write_taurus_file(format!("{}{:04}.dat", filename, i).as_str())
+            }
+        }
     }
 
     Ok(())
