@@ -5,7 +5,6 @@ use sqlx::{Pool, Postgres, Row};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
-use tokio;
 
 const DB_TYPE: &str = "postgresql://hdb_viewer";
 const DB_USER: &str = "2tQXXVJtax+QLj61tg1Zxg+AByTLTt526AHcM+XmVCVW";
@@ -22,6 +21,9 @@ struct Cli {
 
     #[arg(short, long)]
     end: NaiveDateTime,
+
+    #[arg(short, long, default_value = "accelerator")]
+    database: String,
 }
 
 #[derive(Debug)]
@@ -41,7 +43,7 @@ impl ArchiverData {
     fn get_taurus_format(&self) -> String {
         let mut result: String = Default::default();
         result += format!("\"# DATASET= {}\"\n", self.name).as_str();
-        result += format!("\"# SNAPSHOT_TIME=\"\n").as_str();
+        result += "\"# SNAPSHOT_TIME=\"\n";
 
         for (date, val) in self.time.iter().zip(self.data.iter()) {
             result += format!(
@@ -52,7 +54,7 @@ impl ArchiverData {
             .as_str();
         }
 
-        return result;
+        result
     }
 
     fn write_taurus_file(self, fname: &str) {
@@ -125,8 +127,16 @@ async fn get_single_attr_data(
 async fn main() -> Result<(), sqlx::Error> {
     let cli = Cli::parse();
 
-    let database = "accelerator";
-    let db_names = HashMap::from([("accelerator", "hdb_machine")]);
+    let start = cli.start.and_local_timezone(Local).unwrap();
+    let end = cli.end.and_local_timezone(Local).unwrap();
+    let searchstr = cli.searchstr.to_string();
+    let database = cli.database.as_str();
+
+    let db_names = HashMap::from([("accelerator", "hdb_machine"), ("machine", "hdb_machine")]);
+
+    if !db_names.contains_key(database) {
+        todo!()
+    }
 
     let db_conn_str = format!(
         "{DB_TYPE}:{DB_USER}@{DB_URL}:{DB_PORT}/{db_name}",
@@ -138,10 +148,7 @@ async fn main() -> Result<(), sqlx::Error> {
         .connect(&db_conn_str)
         .await?;
 
-    let attrs = get_ids_and_tables(cli.searchstr.to_string(), &pool).await?;
-
-    let start = cli.start.and_local_timezone(Local).unwrap();
-    let end = cli.end.and_local_timezone(Local).unwrap();
+    let attrs = get_ids_and_tables(searchstr, &pool).await?;
 
     for (i, attr) in attrs.iter().enumerate() {
         let res = get_single_attr_data(attr, &start, &end, &pool).await?;
