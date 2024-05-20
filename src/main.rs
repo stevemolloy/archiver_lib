@@ -11,7 +11,6 @@ const DB_USER: &str = "2tQXXVJtax+QLj61tg1Zxg+AByTLTt526AHcM+XmVCVW";
 const DB_URL: &str = "timescaledb.maxiv.lu.se";
 const DB_PORT: &str = "15432";
 
-#[derive(Debug)]
 struct ArchiverAttr {
     id: i32,
     name: String,
