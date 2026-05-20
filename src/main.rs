@@ -1,4 +1,6 @@
 use clap::Parser;
+use log::{Level, Metadata, Record};
+use log::{LevelFilter, SetLoggerError};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::types::chrono::{DateTime, Local, NaiveDateTime, Utc};
 use sqlx::{Pool, Postgres, Row};
@@ -10,6 +12,22 @@ const DB_TYPE: &str = "postgresql://hdb_viewer";
 const DB_USER: &str = "2tQXXVJtax+QLj61tg1Zxg+AByTLTt526AHcM+XmVCVW";
 const DB_URL: &str = "timescaledb.maxiv.lu.se";
 const DB_PORT: &str = "15432";
+
+struct SimpleLogger;
+
+impl log::Log for SimpleLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            println!("{} - {}", record.level(), record.args());
+        }
+    }
+
+    fn flush(&self) {}
+}
 
 struct ArchiverAttr {
     id: i32,
@@ -125,9 +143,17 @@ struct Cli {
     file: Option<String>,
 }
 
+static LOGGER: SimpleLogger = SimpleLogger;
+
+pub fn init_logger(level: LevelFilter) -> Result<(), SetLoggerError> {
+    log::set_logger(&LOGGER).map(|()| log::set_max_level(level))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), sqlx::Error> {
     let cli = Cli::parse();
+
+    let _ = init_logger(LevelFilter::Info);
 
     let start = cli.start.and_local_timezone(Local).unwrap();
     let end = cli.end.and_local_timezone(Local).unwrap();
